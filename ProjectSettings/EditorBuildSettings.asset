@@ -1,0 +1,10 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1045 &1
+EditorBuildSettings:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Scenes: []
+  m_configObjects:
+    com.unity.xr.management.loader_settings: {fileID: 11400000, guid: e95337ecd11894534b30239ac3eb0bd9, type: 2}
+    xr.sdk.mock-hmd.settings: {fileID: 11400000, guid: 81d30b9f49cae4f249f476e7123af81c, type: 2}
