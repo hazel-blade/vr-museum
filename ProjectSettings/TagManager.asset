@@ -5,6 +5,8 @@ TagManager:
   serializedVersion: 2
   tags:
   - CuttableWood
+  - FuelCan
+  - Fuel
   layers:
   - Default
   - TransparentFX
