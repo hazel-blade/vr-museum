@@ -802,7 +802,7 @@ GameObject:
   - component: {fileID: 124749784}
   - component: {fileID: 124749785}
   m_Layer: 0
-  m_Name: Spot Light
+  m_Name: TantoLight
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -2028,7 +2028,7 @@ GameObject:
   - component: {fileID: 283110200}
   - component: {fileID: 283110201}
   m_Layer: 0
-  m_Name: Spot Light
+  m_Name: ShieldLight
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -2184,7 +2184,7 @@ GameObject:
   - component: {fileID: 315503511}
   - component: {fileID: 315503512}
   m_Layer: 0
-  m_Name: Spot Light
+  m_Name: PharoahLight
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -3072,7 +3072,7 @@ GameObject:
   - component: {fileID: 450200964}
   - component: {fileID: 450200965}
   m_Layer: 0
-  m_Name: Spot Light
+  m_Name: Ko2Light
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -4134,6 +4134,20 @@ MonoBehaviour:
   - {fileID: 110253075}
   - {fileID: 1022755267}
   - {fileID: 773882317}
+  - {fileID: 913473097}
+  - {fileID: 1450784873}
+  - {fileID: 283110201}
+  - {fileID: 795623740}
+  - {fileID: 315503512}
+  - {fileID: 720223081}
+  - {fileID: 1942807086}
+  - {fileID: 1789964467}
+  - {fileID: 1289017680}
+  - {fileID: 1967286925}
+  - {fileID: 124749785}
+  - {fileID: 817385978}
+  - {fileID: 450200965}
+  - {fileID: 1460351851}
   activationSound: {fileID: 0}
 --- !u!4 &568126866 stripped
 Transform:
@@ -6493,7 +6507,7 @@ GameObject:
   - component: {fileID: 720223080}
   - component: {fileID: 720223081}
   m_Layer: 0
-  m_Name: Spot Light
+  m_Name: FireBowl1Light
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -7446,7 +7460,7 @@ GameObject:
   - component: {fileID: 795623739}
   - component: {fileID: 795623740}
   m_Layer: 0
-  m_Name: Spot Light
+  m_Name: AnubisLight
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -7540,7 +7554,7 @@ GameObject:
   - component: {fileID: 817385977}
   - component: {fileID: 817385978}
   m_Layer: 0
-  m_Name: Spot Light
+  m_Name: Ko1Light
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -8001,7 +8015,7 @@ GameObject:
   - component: {fileID: 913473096}
   - component: {fileID: 913473097}
   m_Layer: 0
-  m_Name: Spot Light
+  m_Name: KhopeshLight
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -12222,7 +12236,7 @@ Transform:
   m_GameObject: {fileID: 1266943094}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.27, y: -0.06, z: 6.72}
+  m_LocalPosition: {x: 4.32, y: -0.06, z: -5.46}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -12683,7 +12697,7 @@ GameObject:
   - component: {fileID: 1289017681}
   - component: {fileID: 1289017680}
   m_Layer: 0
-  m_Name: Spot Light
+  m_Name: KatanaLight
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -14469,7 +14483,7 @@ GameObject:
   - component: {fileID: 1450784872}
   - component: {fileID: 1450784873}
   m_Layer: 0
-  m_Name: Spot Light
+  m_Name: SwordLight
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -14657,7 +14671,7 @@ GameObject:
   - component: {fileID: 1460351850}
   - component: {fileID: 1460351851}
   m_Layer: 0
-  m_Name: Spot Light
+  m_Name: RustLight
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -18923,7 +18937,7 @@ GameObject:
   - component: {fileID: 1789964466}
   - component: {fileID: 1789964467}
   m_Layer: 0
-  m_Name: Spot Light
+  m_Name: PillarLight
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -20195,7 +20209,7 @@ GameObject:
   - component: {fileID: 1942807085}
   - component: {fileID: 1942807086}
   m_Layer: 0
-  m_Name: Spot Light
+  m_Name: FireBowl2Light
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -20721,7 +20735,7 @@ GameObject:
   - component: {fileID: 1967286924}
   - component: {fileID: 1967286925}
   m_Layer: 0
-  m_Name: Spot Light
+  m_Name: ShiraLight
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
