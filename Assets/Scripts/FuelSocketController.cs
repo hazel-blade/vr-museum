@@ -17,6 +17,15 @@ public class FuelSocketController : MonoBehaviour
 
     private bool isActivated;
 
+    private void Awake()
+    {
+        XRSocketInteractor socket = GetComponent<XRSocketInteractor>();
+        if (socket != null)
+        {
+            socket.selectEntered.AddListener(OnFuelInserted);
+        }
+    }
+
     private void Start()
 {
     foreach (GameObject target in objectsToActivate)
@@ -72,5 +81,10 @@ public class FuelSocketController : MonoBehaviour
             activationSound.Play();
 
         Debug.Log("Fuel inserted. Generator activated.");
+        
+        if (MissionManager.Instance != null)
+        {
+            MissionManager.Instance.CompleteGenerator();
+        }
     }
 }
