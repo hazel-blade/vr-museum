@@ -12,7 +12,7 @@ public class SawCutter : MonoBehaviour
     {
         if (hasCut) return;
 
-        if (other.CompareTag("CuttableWood"))
+        if (other.CompareTag("Cuttable"))
         {
             hasCut = true;
             StartCoroutine(CutWood(other.gameObject));

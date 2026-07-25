@@ -4,11 +4,13 @@
 TagManager:
   serializedVersion: 2
   tags:
-  - CuttableWood
   - FuelCan
   - Fuel
   - Key
   - Relic
+  - Cuttable
+  - StorageKey
+  - BoltCutter
   layers:
   - Default
   - TransparentFX
