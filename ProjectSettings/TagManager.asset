@@ -10,6 +10,7 @@ TagManager:
   - Cuttable
   - StorageKey
   - BoltCutter
+  - Relic
   layers:
   - Default
   - TransparentFX
