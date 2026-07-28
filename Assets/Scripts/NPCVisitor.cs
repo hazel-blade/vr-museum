@@ -1,21 +1,33 @@
 using System.Collections;
 using UnityEngine;
+using UnityEngine.AI;
 
+[RequireComponent(typeof(NavMeshAgent))]
 public class NPCVisitor : MonoBehaviour
 {
     [Header("Waypoints")]
     public Transform enterWaypoint;
+    public Transform[] museumWaypoints;
     public Transform exitWaypoint;
 
     [Header("Movement Settings")]
-    public float moveSpeed = 2f;
+    public float moveSpeed = 0.8f;
     public float waitTimeInside = 5f;
 
     private Animator animator;
+    private NavMeshAgent agent;
 
     private void Awake()
     {
         animator = GetComponentInChildren<Animator>();
+        agent = GetComponent<NavMeshAgent>();
+        
+        if (agent != null)
+        {
+            agent.speed = moveSpeed;
+            // Lower avoidance quality so they don't stutter when crossing paths
+            agent.obstacleAvoidanceType = ObstacleAvoidanceType.LowQualityObstacleAvoidance;
+        }
     }
 
     public void StartVisiting()
@@ -26,43 +38,72 @@ public class NPCVisitor : MonoBehaviour
 
     private IEnumerator VisitRoutine()
     {
-        // Walk to enter waypoint
-        if (enterWaypoint != null)
+        Vector3 startPos = transform.position; // Remember initial spawn point outside door 2
+
+        while (true)
         {
-            yield return StartCoroutine(WalkTo(enterWaypoint.position));
+            // Teleport back to spawn point for the next loop
+            if (agent != null) agent.Warp(startPos);
+            else transform.position = startPos;
+
+            // Walk to enter waypoint
+            if (enterWaypoint != null)
+            {
+                yield return StartCoroutine(WalkTo(enterWaypoint.position));
+            }
+
+            // Walk around museum waypoints
+            if (museumWaypoints != null && museumWaypoints.Length > 0)
+            {
+                foreach (var wp in museumWaypoints)
+                {
+                    if (wp != null)
+                    {
+                        yield return StartCoroutine(WalkTo(wp.position));
+                        yield return new WaitForSeconds(waitTimeInside);
+                    }
+                }
+            }
+            else
+            {
+                // Wait inside fallback
+                if (animator != null) animator.SetBool("IsWalking", false);
+                yield return new WaitForSeconds(waitTimeInside);
+            }
+
+            // Walk to exit waypoint
+            if (exitWaypoint != null)
+            {
+                yield return StartCoroutine(WalkTo(exitWaypoint.position));
+            }
+
+            // Briefly stop at the exit before looping
+            if (animator != null) animator.SetBool("IsWalking", false);
+            yield return new WaitForSeconds(2f);
         }
-
-        // Wait inside
-        if (animator != null) animator.SetBool("IsWalking", false);
-        yield return new WaitForSeconds(waitTimeInside);
-
-        // Walk to exit waypoint
-        if (exitWaypoint != null)
-        {
-            yield return StartCoroutine(WalkTo(exitWaypoint.position));
-        }
-
-        // Deactivate or destroy upon exit
-        gameObject.SetActive(false);
     }
 
     private IEnumerator WalkTo(Vector3 targetPosition)
     {
+        if (agent == null) yield break;
+
         if (animator != null) animator.SetBool("IsWalking", true);
 
-        // Face the target
-        Vector3 direction = (targetPosition - transform.position).normalized;
-        if (direction != Vector3.zero)
-        {
-            transform.rotation = Quaternion.LookRotation(new Vector3(direction.x, 0, direction.z));
-        }
+        agent.SetDestination(targetPosition);
 
-        while (Vector3.Distance(new Vector3(transform.position.x, 0, transform.position.z), new Vector3(targetPosition.x, 0, targetPosition.z)) > 0.1f)
+        // Wait for path calculation
+        while (agent.pathPending)
         {
-            transform.position = Vector3.MoveTowards(transform.position, targetPosition, moveSpeed * Time.deltaTime);
             yield return null;
         }
 
-        transform.position = new Vector3(targetPosition.x, transform.position.y, targetPosition.z);
+        // Wait until we reach the destination
+        while (agent.remainingDistance > agent.stoppingDistance + 0.1f)
+        {
+            if (animator != null) animator.SetBool("IsWalking", true);
+            yield return null;
+        }
+
+        if (animator != null) animator.SetBool("IsWalking", false);
     }
 }
