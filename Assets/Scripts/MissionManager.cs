@@ -2,14 +2,22 @@ using System.Collections;
 using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.Events;
 
 public class MissionManager : MonoBehaviour
 {
+    [Header("Events")]
+    public UnityEvent onMuseumRestored;
+
     public static MissionManager Instance { get; private set; }
 
     [Header("Mission Settings")]
     [SerializeField] private float timeLimitSeconds = 600f; // 10 minutes
     [SerializeField] private string sceneToRestart = "SampleScene";
+
+    [Header("Time Out Settings")]
+    [SerializeField] private GameObject timeOutPanel;
+    [SerializeField] private string mainMenuSceneName = "MainMenu";
 
     [Header("Blackout Settings")]
     [SerializeField] private Light mainDirectionalLight;
@@ -164,14 +172,69 @@ public class MissionManager : MonoBehaviour
 
         Debug.Log("All missions completed! The museum is open.");
         
+        // Find and open all doors in the scene automatically
+        MuseumDoorController[] doors = FindObjectsOfType<MuseumDoorController>();
+        foreach (var door in doors)
+        {
+            if (door != null) door.OpenDoor();
+        }
 
+        // Find and trigger all NPCs in the scene (including hidden ones)
+        NPCVisitor[] npcs = FindObjectsOfType<NPCVisitor>(true);
+        foreach (var npc in npcs)
+        {
+            if (npc != null) npc.StartVisiting();
+        }
+
+        onMuseumRestored?.Invoke();
     }
 
     private void OnTimeRanOut()
     {
         isTimerRunning = false;
-        Debug.Log("Time ran out! Restarting program...");
-        SceneManager.LoadScene(sceneToRestart);
+        Debug.Log("Time ran out! Showing options...");
+        if (timeOutPanel != null)
+        {
+            timeOutPanel.SetActive(true);
+        }
+        else
+        {
+            // Fallback if no UI is set
+            SceneManager.LoadScene(sceneToRestart);
+        }
+    }
+
+    public void ChooseCheckpoint()
+    {
+        if (timeOutPanel != null)
+            timeOutPanel.SetActive(false);
+
+        int completedCount = 0;
+        if (isGeneratorRunning) completedCount++;
+        if (isNodachiReplaced) completedCount++;
+        if (isSayaNodachiReplaced) completedCount++;
+
+        if (completedCount >= 1)
+        {
+            remainingTime = timeLimitSeconds / 2f; // Get half time (e.g., 5 mins)
+            Debug.Log($"Restarting from checkpoint. Keep completed missions. Time left: {remainingTime}s");
+            isTimerRunning = true;
+            if (timerText != null)
+            {
+                timerText.color = Color.white;
+                UpdateTimerUI();
+            }
+        }
+        else
+        {
+            // If no missions are completed, restart from the beginning
+            SceneManager.LoadScene(sceneToRestart);
+        }
+    }
+
+    public void ChooseMainMenu()
+    {
+        SceneManager.LoadScene(mainMenuSceneName);
     }
 
     [ContextMenu("Debug Complete All Missions")]
