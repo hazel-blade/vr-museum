@@ -95,7 +95,7 @@ InitTestScene*.unity*
 # By default, Addressables content builds will generate addressables_content_state.bin
 # files in platform-specific subfolders, for example:
 # /Assets/AddressableAssetsData/OSX/addressables_content_state.bin
-/[Aa]ssets/AddressableAssetsData/*/*.bin*
+/n[Aa]ssets/AddressableAssetsData/*/*.bin*
 
 # Visual Scripting auto-generated files
 /[Aa]ssets/Unity.VisualScripting.Generated/VisualScripting.Flow/UnitOptions.db
@@ -105,3 +105,5 @@ InitTestScene*.unity*
 
 # Auto-generated scenes by play mode tests
 /[Aa]ssets/[Ii]nit[Tt]est[Ss]cene*.unity*
+
+/Doc
