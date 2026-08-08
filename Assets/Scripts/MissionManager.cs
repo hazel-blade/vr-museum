@@ -15,8 +15,9 @@ public class MissionManager : MonoBehaviour
     [SerializeField] private float timeLimitSeconds = 600f; // 10 minutes
     [SerializeField] private string sceneToRestart = "SampleScene";
 
-    [Header("Time Out Settings")]
-    [SerializeField] private GameObject timeOutPanel;
+    [Header("Ending Panels")]
+    [SerializeField] private GameObject timeOutPanel; // Shows when time runs out
+    [SerializeField] private GameObject victoryPanel; // Shows when you win (optional)
     [SerializeField] private string mainMenuSceneName = "MainMenu";
 
     [Header("Blackout Settings")]
@@ -27,18 +28,20 @@ public class MissionManager : MonoBehaviour
     [Header("UI")]
     [SerializeField] private TMP_Text timerText;
     [Header("Mission UI Checks")]
-    [SerializeField] private GameObject generatorCheckmark;
-    [SerializeField] private GameObject nodachiCheckmark;
-    [SerializeField] private GameObject sayaNodachiCheckmark;
+    [SerializeField] private GameObject generatorCheckmark; // Mission 1
+    [SerializeField] private GameObject nodachiCheckmark; // Mission 2 (Replace Both Items)
+    [SerializeField] private GameObject sayaNodachiCheckmark; // Mission 3 (Go to Stage)
 
     private float remainingTime;
     private bool isTimerRunning = false;
 
     // Mission states
     private bool isGeneratorRunning = false;
-    private bool isNodachiReplaced = false;
-    private bool isSayaNodachiReplaced = false;
+    private bool isItem1Replaced = false;
+    private bool isItem2Replaced = false;
+    private bool isMission2Complete = false;
     public bool isMuseumOpen = false;
+    private bool isStageReached = false;
 
     private void Awake()
     {
@@ -59,7 +62,8 @@ public class MissionManager : MonoBehaviour
 
     private void Update()
     {
-        if (isTimerRunning && !isMuseumOpen)
+        // Timer runs until the player reaches the stage (Mission 3 ends)
+        if (isTimerRunning && !isStageReached)
         {
             remainingTime -= Time.deltaTime;
 
@@ -79,9 +83,17 @@ public class MissionManager : MonoBehaviour
     {
         int minutes = Mathf.FloorToInt(remainingTime / 60f);
         int seconds = Mathf.FloorToInt(remainingTime % 60f);
-        timerText.text = string.Format("{0:00}:{1:00}", minutes, seconds);
+        
+        if (isMuseumOpen)
+        {
+            // Mission 2 is complete, so show the Event Started text but keep the timer ticking for Mission 3!
+            timerText.text = string.Format("Event Started!\nTime left: {0:00}:{1:00}", minutes, seconds);
+        }
+        else
+        {
+            timerText.text = string.Format("{0:00}:{1:00}", minutes, seconds);
+        }
 
-        // Optional: Make text red when less than 1 minute remains
         if (remainingTime <= 60f)
         {
             timerText.color = Color.red;
@@ -93,19 +105,21 @@ public class MissionManager : MonoBehaviour
         remainingTime = timeLimitSeconds;
         isTimerRunning = true;
         isMuseumOpen = false;
+        isStageReached = false;
+        isMission2Complete = false;
+        isItem1Replaced = false;
+        isItem2Replaced = false;
 
-        // Apply blackout visual effect
         if (mainDirectionalLight != null)
             mainDirectionalLight.enabled = false;
         
         RenderSettings.ambientLight = blackoutAmbientColor;
 
-        // Hide checkmarks at start
         if (generatorCheckmark != null) generatorCheckmark.SetActive(false);
         if (nodachiCheckmark != null) nodachiCheckmark.SetActive(false);
         if (sayaNodachiCheckmark != null) sayaNodachiCheckmark.SetActive(false);
 
-        Debug.Log("Blackout started! You have 10 minutes to restore the museum.");
+        Debug.Log("Blackout started! You have 10 minutes to restore the museum and reach the stage.");
     }
 
     public void CompleteGenerator()
@@ -115,78 +129,174 @@ public class MissionManager : MonoBehaviour
         
         if (generatorCheckmark != null) generatorCheckmark.SetActive(true);
 
-        Debug.Log("Mission Update: Generator is running.");
-        CheckMissionComplete();
+        Debug.Log("Mission Update: Generator is running (Mission 1 Complete).");
+        CheckMuseumOpen();
     }
 
-    public void CompleteNodachi()
+    public void CompleteItem1()
     {
-        if (isNodachiReplaced) return;
-        isNodachiReplaced = true;
-        
-        if (nodachiCheckmark != null) nodachiCheckmark.SetActive(true);
-
-        Debug.Log("Mission Update: Nodachi replaced.");
-        CheckMissionComplete();
+        if (isItem1Replaced) return;
+        isItem1Replaced = true;
+        Debug.Log("Mission Update: Item 1 replaced.");
+        CheckMission2Complete();
     }
 
-    public void CompleteSayaNodachi()
+    public void CompleteItem2()
     {
-        if (isSayaNodachiReplaced) return;
-        isSayaNodachiReplaced = true;
-        
-        if (sayaNodachiCheckmark != null) sayaNodachiCheckmark.SetActive(true);
-
-        Debug.Log("Mission Update: Saya_Nodachi replaced.");
-        CheckMissionComplete();
+        if (isItem2Replaced) return;
+        isItem2Replaced = true;
+        Debug.Log("Mission Update: Item 2 replaced.");
+        CheckMission2Complete();
     }
 
-    // Keep backwards compatibility for any existing calls
-    public void CompleteItem1() => CompleteNodachi();
-    public void CompleteItem2() => CompleteSayaNodachi();
-
-    private void CheckMissionComplete()
+    private void CheckMission2Complete()
     {
-        if (isGeneratorRunning && isNodachiReplaced && isSayaNodachiReplaced)
+        if (isItem1Replaced && isItem2Replaced && !isMission2Complete)
         {
-            OnMissionSuccess();
+            isMission2Complete = true;
+            if (nodachiCheckmark != null) nodachiCheckmark.SetActive(true);
+            Debug.Log("Mission Update: Both items replaced (Mission 2 Complete).");
+            CheckMuseumOpen();
         }
     }
 
-    private void OnMissionSuccess()
+    private void CheckMuseumOpen()
     {
-        isTimerRunning = false;
+        // Museum opens when Mission 1 and Mission 2 are complete
+        if (isGeneratorRunning && isMission2Complete && !isMuseumOpen)
+        {
+            OpenMuseum();
+        }
+    }
+
+    private void OpenMuseum()
+    {
         isMuseumOpen = true;
 
         if (timerText != null)
         {
-            timerText.color = Color.green;
-            timerText.text = "Museum Restored!";
+            timerText.color = Color.yellow;
+            // Immediate UI update so the user sees "Event Started!" the exact frame Mission 2 completes
+            UpdateTimerUI();
         }
 
-        // Restore visuals
         if (mainDirectionalLight != null)
             mainDirectionalLight.enabled = true;
         
         RenderSettings.ambientLight = normalAmbientColor;
 
-        Debug.Log("All missions completed! The museum is open.");
+        Debug.Log("Museum restored! Now get to the Stage before time runs out! (Mission 3)");
         
-        // Find and open all doors in the scene automatically
         MuseumDoorController[] doors = FindObjectsOfType<MuseumDoorController>();
         foreach (var door in doors)
         {
             if (door != null) door.OpenDoor();
         }
 
-        // Find and trigger all NPCs in the scene (including hidden ones)
-        NPCVisitor[] npcs = FindObjectsOfType<NPCVisitor>(true);
-        foreach (var npc in npcs)
+        // Start spawning NPCs or activate them
+        NPCSpawner spawner = FindObjectOfType<NPCSpawner>();
+        if (spawner != null)
         {
-            if (npc != null) npc.StartVisiting();
+            spawner.SpawnNPCs();
+        }
+        else
+        {
+            NPCVisitor[] npcs = FindObjectsOfType<NPCVisitor>(true);
+            foreach (var npc in npcs)
+            {
+                if (npc != null) npc.StartVisiting();
+            }
         }
 
         onMuseumRestored?.Invoke();
+    }
+
+    public void OnStageReached()
+    {
+        // Only valid if museum is open (Mission 1 and 2 complete)
+        if (!isMuseumOpen || isStageReached) return;
+
+        isStageReached = true;
+        isTimerRunning = false; // Stop the timer
+
+        if (sayaNodachiCheckmark != null) sayaNodachiCheckmark.SetActive(true); // Mission 3 Complete UI
+
+        if (timerText != null)
+        {
+            timerText.color = Color.green;
+            timerText.text = "Goal Reached!";
+        }
+
+        Debug.Log("Stage reached! Mission 3 Complete. NPCs are gathering.");
+
+        // Tell all NPCs to go to the stage
+        NPCVisitor[] npcs = FindObjectsOfType<NPCVisitor>();
+        foreach (var npc in npcs)
+        {
+            if (npc != null) npc.GoToStage();
+        }
+
+        StartCoroutine(EndGameRoutine());
+    }
+
+    private IEnumerator EndGameRoutine()
+    {
+        // Wait a few seconds for NPCs to gather and the player to enjoy the scene
+        yield return new WaitForSeconds(10f);
+        
+        Debug.Log("Game Won! Showing Victory Screen.");
+        
+        if (victoryPanel != null)
+        {
+            victoryPanel.SetActive(true);
+        }
+        else
+        {
+            // If the user hasn't made a Victory Panel yet, generate a floating text in front of the VR camera!
+            CreateVictoryText();
+        }
+    }
+
+    private void CreateVictoryText()
+    {
+        GameObject canvasObj = new GameObject("VictoryCanvas");
+        Canvas canvas = canvasObj.AddComponent<Canvas>();
+        canvas.renderMode = RenderMode.WorldSpace;
+        
+        RectTransform rt = canvasObj.GetComponent<RectTransform>();
+        rt.sizeDelta = new Vector2(800, 300);
+        
+        // Scale it down significantly so it fits in VR
+        canvasObj.transform.localScale = new Vector3(0.005f, 0.005f, 0.005f);
+        
+        // Position it 2 meters in front of the main camera
+        Camera mainCam = Camera.main;
+        if (mainCam != null)
+        {
+            canvasObj.transform.position = mainCam.transform.position + mainCam.transform.forward * 2f;
+            canvasObj.transform.rotation = Quaternion.LookRotation(canvasObj.transform.position - mainCam.transform.position);
+        }
+        else
+        {
+            canvasObj.transform.position = new Vector3(0, 2f, 0);
+        }
+
+        GameObject textObj = new GameObject("VictoryText");
+        textObj.transform.SetParent(canvasObj.transform, false);
+        
+        TMP_Text text = textObj.AddComponent<TextMeshProUGUI>();
+        text.text = "VICTORY!\nEvent Completed";
+        text.fontSize = 100;
+        text.alignment = TextAlignmentOptions.Center;
+        text.color = Color.yellow;
+        text.fontStyle = FontStyles.Bold;
+        
+        // Ensure text is centered on canvas
+        RectTransform textRt = text.GetComponent<RectTransform>();
+        textRt.anchorMin = Vector2.zero;
+        textRt.anchorMax = Vector2.one;
+        textRt.sizeDelta = Vector2.zero;
+        textRt.anchoredPosition = Vector2.zero;
     }
 
     private void OnTimeRanOut()
@@ -199,7 +309,6 @@ public class MissionManager : MonoBehaviour
         }
         else
         {
-            // Fallback if no UI is set
             SceneManager.LoadScene(sceneToRestart);
         }
     }
@@ -211,14 +320,14 @@ public class MissionManager : MonoBehaviour
 
         int completedCount = 0;
         if (isGeneratorRunning) completedCount++;
-        if (isNodachiReplaced) completedCount++;
-        if (isSayaNodachiReplaced) completedCount++;
+        if (isMission2Complete) completedCount++;
 
         if (completedCount >= 1)
         {
-            remainingTime = timeLimitSeconds / 2f; // Get half time (e.g., 5 mins)
-            Debug.Log($"Restarting from checkpoint. Keep completed missions. Time left: {remainingTime}s");
+            remainingTime = timeLimitSeconds / 2f; // Get half time
+            Debug.Log($"Restarting from checkpoint. Time left: {remainingTime}s");
             isTimerRunning = true;
+            isStageReached = false;
             if (timerText != null)
             {
                 timerText.color = Color.white;
@@ -227,7 +336,6 @@ public class MissionManager : MonoBehaviour
         }
         else
         {
-            // If no missions are completed, restart from the beginning
             SceneManager.LoadScene(sceneToRestart);
         }
     }
@@ -237,12 +345,35 @@ public class MissionManager : MonoBehaviour
         SceneManager.LoadScene(mainMenuSceneName);
     }
 
-    [ContextMenu("Debug Complete All Missions")]
+    [ContextMenu("DEBUG: 1. Complete Mission 1 (Generator)")]
+    public void DebugCompleteMission1()
+    {
+        Debug.Log("DEBUG: Forcing Mission 1 Complete.");
+        CompleteGenerator();
+    }
+
+    [ContextMenu("DEBUG: 2. Complete Mission 2 (Sockets)")]
+    public void DebugCompleteMission2()
+    {
+        Debug.Log("DEBUG: Forcing Mission 2 Complete.");
+        CompleteItem1();
+        CompleteItem2();
+    }
+
+    [ContextMenu("DEBUG: 3. Complete Mission 3 (Stage)")]
+    public void DebugCompleteMission3()
+    {
+        Debug.Log("DEBUG: Forcing Mission 3 Complete.");
+        OnStageReached();
+    }
+
+    [ContextMenu("DEBUG: Complete ALL Missions")]
     public void DebugCompleteAllMissions()
     {
         Debug.Log("DEBUG: Auto-completing all missions...");
         CompleteGenerator();
         CompleteItem1();
         CompleteItem2();
+        Invoke("OnStageReached", 2f);
     }
 }

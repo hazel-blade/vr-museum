@@ -4,7 +4,7 @@ using UnityEngine.XR.Interaction.Toolkit;
 public class ItemReplacementSocket : MonoBehaviour
 {
     [Header("Mission Settings")]
-    [SerializeField] private bool isItem1 = true; // true = Mission 2 (Nodachi), false = Mission 3 (Saya_Nodachi)
+    [SerializeField] private bool isItem1 = true; // true = Nodachi, false = Saya_Nodachi
     [SerializeField] private string requiredTag = "Relic";
 
     [Tooltip("Type the exact name of the item. E.g. 'Nodachi' for Table 2, 'Saya_Nodachi' for Table 3.")]
@@ -46,7 +46,7 @@ public class ItemReplacementSocket : MonoBehaviour
     private void ActivateMissionItem()
     {
         isActivated = true;
-        Debug.Log($"CORRECT ITEM placed! Completing mission {(isItem1 ? "2" : "3")}.");
+        Debug.Log($"CORRECT ITEM placed! Completing socket {(isItem1 ? "1" : "2")}.");
 
         if (MissionManager.Instance != null)
         {

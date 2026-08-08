@@ -31,6 +31,8 @@ public class NPCVisitor : MonoBehaviour
     private bool isCurrentlyWalking = false;
     private bool animationInitialized = false;
     private float initialFloorY;
+    
+    private bool isHeadingToStage = false;
 
     private void Awake()
     {
@@ -41,7 +43,7 @@ public class NPCVisitor : MonoBehaviour
         if (agent != null)
         {
             agent.speed = moveSpeed;
-            agent.stoppingDistance = 0.2f;
+            agent.stoppingDistance = 0.5f;
             // Lower avoidance quality so they don't stutter when crossing paths
             agent.obstacleAvoidanceType = ObstacleAvoidanceType.LowQualityObstacleAvoidance;
         }
@@ -63,7 +65,7 @@ public class NPCVisitor : MonoBehaviour
     {
         if (animator == null || animationInitialized) return;
 
-        // First, check if the Animator Controller explicitly defines a boolean parameter (e.g. IsWalking, Walk, Moving)
+        // First, check if the Animator Controller explicitly defines a boolean parameter
         if (animator.runtimeAnimatorController != null)
         {
             foreach (AnimatorControllerParameter param in animator.parameters)
@@ -80,24 +82,24 @@ public class NPCVisitor : MonoBehaviour
                 }
             }
 
-            // If no parameters or transitions are configured (default in DenysAlmaral CityPeople pack), scan clip names
+            // Scan clip names to find pure walk and idle
             if (!hasWalkingParam && animator.runtimeAnimatorController.animationClips != null)
             {
                 foreach (AnimationClip clip in animator.runtimeAnimatorController.animationClips)
                 {
                     string lowerName = clip.name.ToLower();
-                    if (string.IsNullOrEmpty(walkStateName) && (lowerName.Contains("walk") || lowerName.Contains("jog") || lowerName.Contains("locom") || lowerName.Contains("forward")))
+                    // Prefer basic walk/idle over complex ones
+                    if (string.IsNullOrEmpty(walkStateName) && (lowerName.Contains("walk") || lowerName.Contains("jog")))
                     {
                         walkStateName = clip.name;
                     }
-                    else if (string.IsNullOrEmpty(idleStateName) && (lowerName.Contains("idle") || lowerName.Contains("stand") || lowerName.Contains("check")))
+                    else if (string.IsNullOrEmpty(idleStateName) && lowerName.Contains("idle") && !lowerName.Contains("phone") && !lowerName.Contains("sit") && !lowerName.Contains("talk"))
                     {
                         idleStateName = clip.name;
                     }
                 }
             }
 
-            // Fallback default names if animation clip names did not match standard patterns
             if (string.IsNullOrEmpty(walkStateName)) walkStateName = "locom_m_basicWalk_30f";
             if (string.IsNullOrEmpty(idleStateName)) idleStateName = "idle_m_2_220f";
         }
@@ -109,16 +111,14 @@ public class NPCVisitor : MonoBehaviour
     {
         if (animator == null || agent == null || !agent.enabled || !agent.isOnNavMesh) return;
 
-        // Safely adjust shoe height directly via baseOffset without relying on physics raycasts against colliderless decorative floors
         if (agent.baseOffset != baseHeightOffset)
         {
             agent.baseOffset = baseHeightOffset;
         }
 
-        // Anti-clipping safety guard: immediately restore position if pushed or pathing underneath the museum floor
+        // Anti-clipping safety guard
         if (transform.position.y < initialFloorY - 0.4f)
         {
-            Debug.LogWarning($"[{gameObject.name}] Sunk beneath museum floor! Restoring to valid floor elevation.");
             Vector3 recoveredPos = new Vector3(transform.position.x, initialFloorY, transform.position.z);
             if (NavMesh.SamplePosition(recoveredPos, out NavMeshHit floorHit, 1.5f, NavMesh.AllAreas))
             {
@@ -131,13 +131,45 @@ public class NPCVisitor : MonoBehaviour
             return;
         }
 
-        // Monitor physical velocity on the ground plane to dynamically transition between walking and idle
         bool isMoving = agent.velocity.sqrMagnitude > 0.005f && (agent.pathPending || agent.remainingDistance > agent.stoppingDistance);
 
         if (isMoving != isCurrentlyWalking)
         {
             isCurrentlyWalking = isMoving;
             ApplyAnimationState(isMoving);
+        }
+        else
+        {
+            // AGGRESSIVELY ENFORCE walk or idle state so they don't randomly play other animations!
+            if (!hasWalkingParam)
+            {
+                string targetState = isCurrentlyWalking ? walkStateName : idleStateName;
+                if (!string.IsNullOrEmpty(targetState))
+                {
+                    AnimatorStateInfo stateInfo = animator.GetCurrentAnimatorStateInfo(0);
+                    // If the animator drifted into a different animation (like sitting or checking phone), force it back!
+                    if (!stateInfo.IsName(targetState) && !animator.IsInTransition(0))
+                    {
+                        animator.CrossFadeInFixedTime(targetState, 0.1f);
+                    }
+                }
+            }
+        }
+        
+        // If at stage, rotate to face it
+        if (isHeadingToStage && !isMoving && agent.remainingDistance <= agent.stoppingDistance)
+        {
+            GameObject stage = GameObject.Find("ModularStage") ?? GameObject.Find("MC_light");
+            if (stage != null)
+            {
+                Vector3 dir = (stage.transform.position - transform.position).normalized;
+                dir.y = 0;
+                if (dir.sqrMagnitude > 0.01f)
+                {
+                    Quaternion targetRot = Quaternion.LookRotation(dir);
+                    transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, Time.deltaTime * 5f);
+                }
+            }
         }
     }
 
@@ -154,7 +186,6 @@ public class NPCVisitor : MonoBehaviour
             string targetState = walking ? walkStateName : idleStateName;
             if (!string.IsNullOrEmpty(targetState))
             {
-                // Smoothly transition into the desired animation state in 0.25 seconds
                 animator.CrossFadeInFixedTime(targetState, 0.25f);
             }
         }
@@ -163,45 +194,64 @@ public class NPCVisitor : MonoBehaviour
     public void StartVisiting()
     {
         gameObject.SetActive(true);
+        isHeadingToStage = false;
         StopAllCoroutines();
         StartCoroutine(VisitRoutine());
+    }
+    
+    public void GoToStage()
+    {
+        isHeadingToStage = true;
+        StopAllCoroutines();
+        StartCoroutine(GoToStageRoutine());
+    }
+    
+    private IEnumerator GoToStageRoutine()
+    {
+        GameObject stageWp = GameObject.Find("StageWaypoint");
+        Vector3 targetPos;
+        
+        if (stageWp != null)
+        {
+            Vector2 rand = Random.insideUnitCircle * 3f;
+            targetPos = stageWp.transform.position + new Vector3(rand.x, 0, rand.y);
+        }
+        else
+        {
+            GameObject stage = GameObject.Find("ModularStage") ?? GameObject.Find("MC_light");
+            if (stage != null)
+            {
+                Vector2 rand = Random.insideUnitCircle * 3f;
+                targetPos = stage.transform.position + new Vector3(rand.x, 0, rand.y - 3f);
+            }
+            else
+            {
+                yield break;
+            }
+        }
+
+        yield return StartCoroutine(WalkTo(targetPos));
     }
 
     private IEnumerator VisitRoutine()
     {
-        Vector3 startPos = transform.position; // Remember initial spawn point outside door 2
-
-        // Wait one frame after SetActive(true) for NavMeshAgent to bind to the NavMesh
+        Vector3 startPos = transform.position; 
         yield return null;
 
         while (true)
         {
-            // Sample nearest valid NavMesh position with a tight radius (1.5m) to prevent grabbing underneath terrain
             if (NavMesh.SamplePosition(startPos, out NavMeshHit startHit, 1.5f, NavMesh.AllAreas))
             {
                 startPos = startHit.position;
             }
 
-            // Teleport back to spawn point for the next loop
-            if (agent != null && agent.isActiveAndEnabled)
-            {
-                agent.Warp(startPos);
-            }
-            else
-            {
-                transform.position = startPos;
-            }
+            if (agent != null && agent.isActiveAndEnabled) agent.Warp(startPos);
+            else transform.position = startPos;
 
-            // Wait a brief frame after warping before setting a new destination
             yield return null;
 
-            // Walk to enter waypoint
-            if (enterWaypoint != null)
-            {
-                yield return StartCoroutine(WalkTo(enterWaypoint.position));
-            }
+            if (enterWaypoint != null) yield return StartCoroutine(WalkTo(enterWaypoint.position));
 
-            // Walk around museum waypoints (touring the gallery multiple times before heading to exit)
             int currentLoop = 0;
             while (currentLoop < loopsBeforeExit && museumWaypoints != null && museumWaypoints.Length > 0)
             {
@@ -215,19 +265,10 @@ public class NPCVisitor : MonoBehaviour
                 }
                 currentLoop++;
             }
-            if (museumWaypoints == null || museumWaypoints.Length == 0)
-            {
-                // Wait inside fallback
-                yield return new WaitForSeconds(waitTimeInside);
-            }
+            if (museumWaypoints == null || museumWaypoints.Length == 0) yield return new WaitForSeconds(waitTimeInside);
 
-            // Walk to exit waypoint
-            if (exitWaypoint != null)
-            {
-                yield return StartCoroutine(WalkTo(exitWaypoint.position));
-            }
+            if (exitWaypoint != null) yield return StartCoroutine(WalkTo(exitWaypoint.position));
 
-            // Briefly stop at the exit before looping
             yield return new WaitForSeconds(2f);
         }
     }
@@ -236,50 +277,27 @@ public class NPCVisitor : MonoBehaviour
     {
         if (agent == null || !agent.isActiveAndEnabled || !agent.isOnNavMesh)
         {
-            Debug.LogWarning($"[{gameObject.name}] NavMeshAgent is not active or not on NavMesh. Attempting to sample NavMesh position...");
             if (agent != null && NavMesh.SamplePosition(transform.position, out NavMeshHit currentHit, 1.5f, NavMesh.AllAreas))
             {
                 agent.Warp(currentHit.position);
             }
-            else
-            {
-                yield break;
-            }
+            else yield break;
         }
 
-        // Ensure target position maps to a valid point on the NavMesh without dropping through floor levels
         if (NavMesh.SamplePosition(targetPosition, out NavMeshHit targetHit, 1.5f, NavMesh.AllAreas))
         {
             targetPosition = targetHit.position;
         }
 
         agent.SetDestination(targetPosition);
-
-        // Wait for path calculation
-        while (agent.pathPending)
-        {
-            yield return null;
-        }
-
-        // Check if path is valid or reachable; if not, avoid an infinite walking loop
-        if (agent.pathStatus == NavMeshPathStatus.PathInvalid)
-        {
-            Debug.LogWarning($"[{gameObject.name}] Cannot reach destination: {targetPosition}. Skipping waypoint.");
-            yield break;
-        }
+        while (agent.pathPending) yield return null;
+        if (agent.pathStatus == NavMeshPathStatus.PathInvalid) yield break;
 
         float timer = 0f;
-
-        // Wait until destination is reached or timeout occurs (to prevent freezing against walls/obstacles)
         while (agent.remainingDistance > agent.stoppingDistance + 0.1f && timer < maxWalkTimeout)
         {
             timer += Time.deltaTime;
-
-            if (agent.pathStatus == NavMeshPathStatus.PathInvalid)
-            {
-                break;
-            }
-
+            if (agent.pathStatus == NavMeshPathStatus.PathInvalid) break;
             yield return null;
         }
     }
