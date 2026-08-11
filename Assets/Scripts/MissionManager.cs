@@ -242,19 +242,11 @@ public class MissionManager : MonoBehaviour
     private IEnumerator EndGameRoutine()
     {
         // Wait a few seconds for NPCs to gather and the player to enjoy the scene
-        yield return new WaitForSeconds(10f);
+        yield return new WaitForSeconds(5f);
         
-        Debug.Log("Game Won! Showing Victory Screen.");
+        Debug.Log("Game Won! Going to Ending Scene.");
         
-        if (victoryPanel != null)
-        {
-            victoryPanel.SetActive(true);
-        }
-        else
-        {
-            // If the user hasn't made a Victory Panel yet, generate a floating text in front of the VR camera!
-            CreateVictoryText();
-        }
+        UnityEngine.SceneManagement.SceneManager.LoadScene("EndingScene");
     }
 
     private void CreateVictoryText()
