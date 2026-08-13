@@ -21,7 +21,7 @@ public class StageInteractable : MonoBehaviour
     {
         // Trigger if the player's body or hand simply walks into it physically
         // We ignore NPCs so they don't accidentally trigger it
-        if (!other.name.Contains("NPC") && !other.CompareTag("NPC"))
+        if (!other.name.Contains("NPC") && other.gameObject.tag != "NPC")
         {
             CompleteMission();
         }

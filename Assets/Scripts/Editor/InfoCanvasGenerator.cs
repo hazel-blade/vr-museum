@@ -1,11 +1,19 @@
 using UnityEngine;
 using UnityEditor;
 using UnityEngine.UI;
-using UnityEngine.Events;
-using UnityEditor.Events;
 using UnityEngine.XR.Interaction.Toolkit;
 using TMPro;
 
+/// <summary>
+/// Editor tool that generates InfoCanvas + DisplaySpot for each museum display item.
+/// 
+/// For each item it:
+///   1. Clones the Katana InfoCanvas onto the item
+///   2. Creates a flat cylinder "spot" on the floor in front of the item
+///   3. Attaches DisplaySpotTrigger to the spot, linked to the InfoCanvas
+///
+/// The spot follows the exact same pattern as StageInteractableSpot in GameLogicUpdater.
+/// </summary>
 public class InfoCanvasGenerator : EditorWindow
 {
     [MenuItem("Tools/VR Museum/Generate InfoCanvases (XR Touch)")]
@@ -14,388 +22,505 @@ public class InfoCanvasGenerator : EditorWindow
         GetWindow<InfoCanvasGenerator>("Generate Info Canvases");
     }
 
-    private void OnGUI()
-    {
-        GUILayout.Label("Auto-Generate InfoCanvases for Museum Items", EditorStyles.boldLabel);
-        EditorGUILayout.HelpBox(
-            "This tool copies the Katana_Generic01 InfoCanvas setup for:\n" +
-            "• Sword\n" +
-            "• Shield\n" +
-            "• Anubis\n" +
-            "• Pharoah\n\n" +
-            "Click the button below to automatically generate all 4 InfoCanvases in your scene.", MessageType.Info);
+    // ─── Data ────────────────────────────────────────────────────────────
 
-        if (GUILayout.Button("Generate 4 InfoCanvases", GUILayout.Height(50)))
-        {
-            GenerateCanvases();
-        }
-
-        EditorGUILayout.Space();
-
-        if (GUILayout.Button("Remove Generated InfoCanvases", GUILayout.Height(30)))
-        {
-            RemoveGeneratedCanvases();
-        }
-    }
-
-    private struct TargetData
+    private struct ItemData
     {
         public string objectName;
         public string title;
         public string description;
+        public Vector3 spotOffset; // manual offset from item position (world space)
 
-        public TargetData(string objectName, string title, string description)
+        public ItemData(string objectName, string title, string description, Vector3 spotOffset)
         {
             this.objectName = objectName;
             this.title = title;
             this.description = description;
+            this.spotOffset = spotOffset;
         }
     }
 
-    private void GenerateCanvases()
+    private static readonly ItemData[] items = new ItemData[]
     {
-        // 1. Find source Katana InfoCanvas
-        GameObject sourceInfoCanvas = FindKatanaInfoCanvas();
-        if (sourceInfoCanvas == null)
+        new ItemData("Sword", "Ancient Egyptian Sword",
+            "A bronze Khopesh sword from the New Kingdom era. Used by pharaohs and elites in combat.",
+            new Vector3(0, 0, 1.2f)),
+
+        new ItemData("Shield", "Royal Ceremonial Shield",
+            "A wooden shield overlaid with leather and gold leaf hieroglyphs, representing royal strength.",
+            new Vector3(0, 0, 1.2f)),
+
+        new ItemData("Anubis", "Statue of Anubis",
+            "A statue depicting Anubis, the ancient Egyptian god of mummification and protector of tombs.",
+            new Vector3(0, 0, 1.2f)),
+
+        new ItemData("Pharoah", "Golden Pharaoh Mask",
+            "A golden death mask symbolizing royal authority and passage to the afterlife.",
+            new Vector3(0, 0, 1.2f)),
+    };
+
+    // ─── GUI ─────────────────────────────────────────────────────────────
+
+    private void OnGUI()
+    {
+        GUILayout.Label("Auto-Generate InfoCanvases for Museum Items", EditorStyles.boldLabel);
+        EditorGUILayout.HelpBox(
+            "This tool generates for each item:\n" +
+            "• An InfoCanvas (cloned from Katana_Generic01)\n" +
+            "• A glowing spot on the floor in front of the item\n\n" +
+            "When the player stands on the spot, the info panel appears.\n" +
+            "When they step off, it disappears.", MessageType.Info);
+
+        EditorGUILayout.Space();
+
+        if (GUILayout.Button("Generate Original 4 Items (Sword, Shield, Anubis, Pharaoh)", GUILayout.Height(30)))
         {
-            Debug.LogError("Could not find 'InfoCanvas' under Katana_Generic01 in the scene!");
-            EditorUtility.DisplayDialog("Error", "Could not find Katana_Generic01 InfoCanvas in the scene.", "OK");
+            GenerateAll();
+        }
+
+        EditorGUILayout.Space();
+        
+        GUILayout.Label("Additions", EditorStyles.boldLabel);
+        if (GUILayout.Button("Generate Katana Spot Only", GUILayout.Height(40)))
+        {
+            GenerateKatanaOnly();
+        }
+
+        EditorGUILayout.Space();
+
+        if (GUILayout.Button("Remove All Generated Objects", GUILayout.Height(30)))
+        {
+            RemoveAll();
+        }
+    }
+
+    // ─── Katana Generation ───────────────────────────────────────────────
+    
+    private void GenerateKatanaOnly()
+    {
+        GameObject sourceCanvas = FindKatanaInfoCanvas();
+        if (sourceCanvas == null)
+        {
+            EditorUtility.DisplayDialog("Error", "Could not find Katana_Generic01 InfoCanvas template.", "OK");
             return;
         }
 
-        TargetData[] targets = new TargetData[]
+        GameObject container = GameObject.Find("--- InfoSpots ---");
+        if (container == null)
         {
-            new TargetData("Sword", "Ancient Egyptian Sword",
-                "A bronze Khopesh sword from the New Kingdom era. Used by pharaohs and elites in combat."),
+            container = new GameObject("--- InfoSpots ---");
+            Undo.RegisterCreatedObjectUndo(container, "Create InfoSpots Container");
+        }
 
-            new TargetData("Shield", "Royal Ceremonial Shield",
-                "A wooden shield overlaid with leather and gold leaf hieroglyphs, representing royal strength."),
+        ItemData katanaData = new ItemData("Katana_Generic01", "Japanese Katana",
+            "A traditional Japanese sword famously used by samurai. Known for its sharpness, strength, and curved blade.",
+            new Vector3(0, 0, 1.2f));
 
-            new TargetData("Anubis", "Statue of Anubis",
-                "A statue depicting Anubis, the ancient Egyptian god of mummification and protector of tombs."),
+        GameObject targetObj = FindInScene(katanaData.objectName);
+        if (targetObj == null)
+        {
+            EditorUtility.DisplayDialog("Error", "Could not find Katana_Generic01 in the scene.", "OK");
+            return;
+        }
 
-            new TargetData("Pharoah", "Golden Pharaoh Mask",
-                "A golden death mask symbolizing royal authority and passage to the afterlife.")
-        };
+        GameObject infoCanvas = CreateInfoCanvas(sourceCanvas, targetObj, katanaData, container);
+        if (infoCanvas != null)
+        {
+            CreateDisplaySpot(container, targetObj, infoCanvas, katanaData);
+            UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(
+                UnityEngine.SceneManagement.SceneManager.GetActiveScene());
+                
+            EditorUtility.DisplayDialog("Success", "Generated InfoCanvas and Spot for Katana ONLY.\nThe other 4 spots were untouched.", "OK");
+        }
+    }
+
+    // ─── Main Generation ─────────────────────────────────────────────────
+
+    private void GenerateAll()
+    {
+        // 1. Find the source InfoCanvas to clone
+        GameObject sourceCanvas = FindKatanaInfoCanvas();
+        if (sourceCanvas == null)
+        {
+            Debug.LogError("[InfoCanvasGenerator] Could not find InfoCanvas under Katana_Generic01!");
+            EditorUtility.DisplayDialog("Error",
+                "Could not find Katana_Generic01 InfoCanvas in the scene.\n" +
+                "Make sure it exists in the hierarchy.", "OK");
+            return;
+        }
+
+        // 2. Find or create a root container for all spots (keeps hierarchy clean)
+        GameObject container = GameObject.Find("--- InfoSpots ---");
+        if (container == null)
+        {
+            container = new GameObject("--- InfoSpots ---");
+            Undo.RegisterCreatedObjectUndo(container, "Create InfoSpots Container");
+        }
 
         int count = 0;
 
-        foreach (var data in targets)
+        foreach (var data in items)
         {
             GameObject targetObj = FindInScene(data.objectName);
             if (targetObj == null)
             {
-                Debug.LogWarning($"Target object '{data.objectName}' not found in scene. Skipping.");
+                Debug.LogWarning($"[InfoCanvasGenerator] '{data.objectName}' not found in scene. Skipping.");
                 continue;
             }
 
-            // Find or Create _Colliders
-            Transform collidersTrans = FindChildRecursiveExact(targetObj.transform, "_Colliders");
-            GameObject collidersObj;
-            if (collidersTrans == null)
-            {
-                collidersObj = new GameObject("_Colliders");
-                Undo.RegisterCreatedObjectUndo(collidersObj, "Create _Colliders");
-                collidersObj.transform.SetParent(targetObj.transform, false);
-            }
-            else
-            {
-                collidersObj = collidersTrans.gameObject;
-            }
+            // ── Step A: Create InfoCanvas on the item ──
 
-            // Remove existing InfoCanvas under _Colliders if re-generating
-            Transform oldCanvas = collidersObj.transform.Find("InfoCanvas");
-            if (oldCanvas != null)
-            {
-                Undo.DestroyObjectImmediate(oldCanvas.gameObject);
-            }
+            GameObject infoCanvas = CreateInfoCanvas(sourceCanvas, targetObj, data, container);
+            if (infoCanvas == null) continue;
 
-            // Ensure Collider on _Colliders
-            EnsureCollider(targetObj, collidersObj);
+            // ── Step B: Create the spot on the floor ──
 
-            // Ensure XRSimpleInteractable on _Colliders
-            XRSimpleInteractable interactable = collidersObj.GetComponent<XRSimpleInteractable>();
-            if (interactable == null)
-            {
-                interactable = Undo.AddComponent<XRSimpleInteractable>(collidersObj);
-            }
-
-            // Instantiate InfoCanvas clone
-            bool wasActive = sourceInfoCanvas.activeSelf;
-            sourceInfoCanvas.SetActive(true);
-
-            GameObject newCanvas = Instantiate(sourceInfoCanvas, collidersObj.transform);
-            Undo.RegisterCreatedObjectUndo(newCanvas, "Create InfoCanvas");
-            newCanvas.name = "InfoCanvas";
-
-            sourceInfoCanvas.SetActive(wasActive);
-
-            // Copy transform from source
-            newCanvas.transform.localPosition = sourceInfoCanvas.transform.localPosition;
-            newCanvas.transform.localRotation = sourceInfoCanvas.transform.localRotation;
-            newCanvas.transform.localScale = sourceInfoCanvas.transform.localScale;
-
-            // Update Titles and Texts
-            UpdateCanvasTexts(newCanvas, data.title, data.description);
-
-            // Get/Setup UIManager component
-            UIManager uiMgr = newCanvas.GetComponent<UIManager>();
-            if (uiMgr == null)
-            {
-                uiMgr = Undo.AddComponent<UIManager>(newCanvas);
-            }
-
-            // Assign UIManager fields
-            SerializedObject uiMgrSO = new SerializedObject(uiMgr);
-            Transform infoTextTrans = FindChildRecursiveExact(newCanvas.transform, "InformationText");
-            if (infoTextTrans != null)
-            {
-                TMP_Text tmpText = infoTextTrans.GetComponent<TMP_Text>();
-                if (tmpText != null)
-                {
-                    uiMgrSO.FindProperty("InformationText").objectReferenceValue = tmpText;
-                }
-            }
-            Canvas canvasComp = newCanvas.GetComponent<Canvas>();
-            if (canvasComp != null)
-            {
-                uiMgrSO.FindProperty("UICanvas").objectReferenceValue = canvasComp;
-            }
-            uiMgrSO.ApplyModifiedProperties();
-
-            // Wire XRSimpleInteractable events -> UIManager.ToggleUI
-            SetupXREvents(interactable, uiMgr);
-
-            // Wire Close button if present
-            SetupCloseButton(newCanvas, uiMgr);
-
-            // Set canvas initial active state (false like Katana)
-            newCanvas.SetActive(false);
+            CreateDisplaySpot(container, targetObj, infoCanvas, data);
 
             count++;
-            Debug.Log($"✓ Generated InfoCanvas for '{data.objectName}' ({data.title})");
+            Debug.Log($"[InfoCanvasGenerator] ✓ Created InfoCanvas + Spot for '{data.objectName}'");
         }
 
+        // Mark scene dirty so Ctrl+S saves changes
         UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(
             UnityEngine.SceneManagement.SceneManager.GetActiveScene());
 
         if (count > 0)
         {
             EditorUtility.DisplayDialog("Success",
-                $"Successfully generated {count} InfoCanvas setups!\n\n" +
-                "Created for: Sword, Shield, Anubis, Pharoah\n" +
-                "When touched/selected in VR, the info canvas will toggle on!\n\n" +
+                $"Generated {count} InfoCanvas + Spot setups!\n\n" +
+                "Stand on the glowing cyan spot in front of each item to see its info.\n\n" +
                 "Remember to Save Scene (Ctrl+S)!", "OK");
         }
         else
         {
-            EditorUtility.DisplayDialog("Notice", "No InfoCanvases were generated. Check Console log.", "OK");
+            EditorUtility.DisplayDialog("Notice",
+                "No objects were generated. Check the Console for warnings.", "OK");
         }
     }
 
-    private void SetupXREvents(XRSimpleInteractable interactable, UIManager uiMgr)
+    // ─── InfoCanvas Creation ─────────────────────────────────────────────
+
+    private GameObject CreateInfoCanvas(GameObject source, GameObject target, ItemData data, GameObject container)
     {
-        // Clear existing listeners
-        for (int i = interactable.selectEntered.GetPersistentEventCount() - 1; i >= 0; i--)
-            UnityEventTools.RemovePersistentListener(interactable.selectEntered, i);
+        // Find or Create _Colliders child (we still keep the XRSimpleInteractable here for backup interaction on the model itself)
+        Transform collidersTrans = target.transform.Find("_Colliders");
+        if (collidersTrans == null)
+            collidersTrans = FindChildRecursive(target.transform, "_Colliders");
 
-        for (int i = interactable.hoverEntered.GetPersistentEventCount() - 1; i >= 0; i--)
-            UnityEventTools.RemovePersistentListener(interactable.hoverEntered, i);
-
-        // Add persistent listener for ToggleUI
-        UnityAction toggleAction = System.Delegate.CreateDelegate(typeof(UnityAction), uiMgr, "ToggleUI") as UnityAction;
-        if (toggleAction != null)
+        GameObject collidersObj;
+        if (collidersTrans == null)
         {
-            UnityEventTools.AddVoidPersistentListener(interactable.selectEntered, toggleAction);
-            UnityEventTools.AddVoidPersistentListener(interactable.hoverEntered, toggleAction);
-        }
-    }
-
-    private void SetupCloseButton(GameObject canvasObj, UIManager uiMgr)
-    {
-        Transform closeBtnTrans = FindChildRecursiveExact(canvasObj.transform, "Close");
-        if (closeBtnTrans == null) closeBtnTrans = FindChildRecursiveExact(canvasObj.transform, "Information");
-
-        if (closeBtnTrans != null)
-        {
-            Button btn = closeBtnTrans.GetComponent<Button>();
-            if (btn != null)
-            {
-                for (int i = btn.onClick.GetPersistentEventCount() - 1; i >= 0; i--)
-                    UnityEventTools.RemovePersistentListener(btn.onClick, i);
-
-                UnityAction toggleAction = System.Delegate.CreateDelegate(typeof(UnityAction), uiMgr, "ToggleUI") as UnityAction;
-                if (toggleAction != null)
-                {
-                    UnityEventTools.AddVoidPersistentListener(btn.onClick, toggleAction);
-                }
-            }
-        }
-    }
-
-    private void EnsureCollider(GameObject targetObj, GameObject collidersObj)
-    {
-        if (collidersObj.GetComponent<Collider>() != null) return;
-        if (collidersObj.GetComponentsInChildren<Collider>().Length > 0) return;
-
-        Renderer[] renderers = targetObj.GetComponentsInChildren<Renderer>(true);
-        BoxCollider bc = collidersObj.AddComponent<BoxCollider>();
-
-        if (renderers.Length > 0)
-        {
-            Bounds bounds = renderers[0].bounds;
-            for (int r = 1; r < renderers.Length; r++)
-            {
-                bounds.Encapsulate(renderers[r].bounds);
-            }
-
-            bc.center = collidersObj.transform.InverseTransformPoint(bounds.center);
-            Vector3 worldSize = bounds.size;
-            Vector3 scale = collidersObj.transform.lossyScale;
-            bc.size = new Vector3(
-                scale.x != 0 ? Mathf.Abs(worldSize.x / scale.x) : 0.5f,
-                scale.y != 0 ? Mathf.Abs(worldSize.y / scale.y) : 0.5f,
-                scale.z != 0 ? Mathf.Abs(worldSize.z / scale.z) : 0.5f
-            );
+            collidersObj = new GameObject("_Colliders");
+            Undo.RegisterCreatedObjectUndo(collidersObj, "Create _Colliders");
+            collidersObj.transform.SetParent(target.transform, false);
         }
         else
         {
-            bc.size = new Vector3(0.5f, 0.5f, 0.5f);
+            collidersObj = collidersTrans.gameObject;
         }
+
+        // Remove old InfoCanvas from _Colliders if re-generating (from older generator versions)
+        Transform oldCanvas = collidersObj.transform.Find("InfoCanvas");
+        if (oldCanvas != null && oldCanvas.gameObject != source)
+            Undo.DestroyObjectImmediate(oldCanvas.gameObject);
+
+        // Also remove old InfoCanvas from container if re-generating
+        Transform oldContainerCanvas = container.transform.Find("InfoCanvas_" + data.objectName);
+        if (oldContainerCanvas != null)
+            Undo.DestroyObjectImmediate(oldContainerCanvas.gameObject);
+
+        // Ensure XRSimpleInteractable on the item itself
+        if (collidersObj.GetComponent<XRSimpleInteractable>() == null)
+            Undo.AddComponent<XRSimpleInteractable>(collidersObj);
+
+        // Clone the source canvas
+        bool wasActive = source.activeSelf;
+        source.SetActive(true);
+
+        // CRITICAL FIX: Parent to the clean container, NOT the model, to avoid extreme FBX scaling distortion
+        GameObject newCanvas = Instantiate(source, container.transform);
+        Undo.RegisterCreatedObjectUndo(newCanvas, "Create InfoCanvas");
+        newCanvas.name = "InfoCanvas_" + data.objectName;
+        
+        // Clean up any missing scripts that might have been copied from the source or its children
+        GameObjectUtility.RemoveMonoBehavioursWithMissingScript(newCanvas);
+        foreach (Transform t in newCanvas.GetComponentsInChildren<Transform>(true))
+        {
+            GameObjectUtility.RemoveMonoBehavioursWithMissingScript(t.gameObject);
+        }
+        source.SetActive(wasActive);
+
+        // Keep original scale
+        newCanvas.transform.localScale = source.transform.localScale;
+        newCanvas.transform.rotation = source.transform.rotation;
+
+        // Position it just above the item
+        newCanvas.transform.position = target.transform.position + new Vector3(0, 1.0f, 0);
+
+        // Update text content
+        UpdateTexts(newCanvas, data.title, data.description);
+
+        // Start hidden
+        newCanvas.SetActive(false);
+
+        return newCanvas;
     }
 
-    private void UpdateCanvasTexts(GameObject canvasObj, string title, string description)
+    // ─── Display Spot Creation ───────────────────────────────────────────
+    // Follows the EXACT same pattern as GameLogicUpdater StageInteractableSpot
+
+    private void CreateDisplaySpot(GameObject container, GameObject targetObj, GameObject infoCanvas, ItemData data)
     {
-        TMP_Text[] tmpTexts = canvasObj.GetComponentsInChildren<TMP_Text>(true);
-        foreach (var textComp in tmpTexts)
+        string spotName = "InfoSpot_" + data.objectName;
+
+        // Remove old spot
+        Transform oldSpot = container.transform.Find(spotName);
+        if (oldSpot != null)
+            Undo.DestroyObjectImmediate(oldSpot.gameObject);
+
+        // Also clean up old spots that might be parented to the target from previous versions
+        Transform oldChildSpot = targetObj.transform.Find("InfoSpot");
+        if (oldChildSpot != null)
+            Undo.DestroyObjectImmediate(oldChildSpot.gameObject);
+
+        // Create the spot — same approach as GameLogicUpdater line 82-100
+        GameObject spotObj = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        Undo.RegisterCreatedObjectUndo(spotObj, "Create InfoSpot");
+        spotObj.name = spotName;
+
+        // Parent to container (world-space, no scale interference)
+        spotObj.transform.SetParent(container.transform);
+
+        // Position: use the item's world position + the configured offset
+        Vector3 itemPos = targetObj.transform.position;
+        spotObj.transform.position = new Vector3(
+            itemPos.x + data.spotOffset.x,
+            0.01f, // just above floor
+            itemPos.z + data.spotOffset.z
+        );
+
+        // Scale: flat disc
+        spotObj.transform.localScale = new Vector3(0.8f, 0.02f, 0.8f);
+        spotObj.transform.rotation = Quaternion.identity;
+
+        // Material: semi-transparent cyan glow
+        Renderer rend = spotObj.GetComponent<Renderer>();
+        if (rend != null)
         {
-            if (textComp.gameObject.name == "Title" || textComp.gameObject.name.Contains("Title"))
-            {
-                textComp.text = title;
-            }
-            else if (textComp.gameObject.name == "InformationText" || textComp.gameObject.name.Contains("Information"))
-            {
-                textComp.text = description;
-            }
+            Material mat = new Material(Shader.Find("Standard"));
+            Color cyan = new Color(0.0f, 0.85f, 1.0f, 0.6f);
+            mat.color = cyan;
+
+            // Enable transparency on Standard shader
+            mat.SetFloat("_Mode", 3); // Transparent
+            mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            mat.SetInt("_ZWrite", 0);
+            mat.DisableKeyword("_ALPHATEST_ON");
+            mat.EnableKeyword("_ALPHABLEND_ON");
+            mat.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+            mat.renderQueue = 3000;
+
+            // Emission for glow effect
+            mat.EnableKeyword("_EMISSION");
+            mat.SetColor("_EmissionColor", cyan * 0.3f);
+
+            rend.sharedMaterial = mat;
+            rend.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            rend.receiveShadows = false;
         }
 
-        Text[] uiTexts = canvasObj.GetComponentsInChildren<Text>(true);
-        foreach (var textComp in uiTexts)
-        {
-            if (textComp.gameObject.name == "Title" || textComp.gameObject.name.Contains("Title"))
-            {
-                textComp.text = title;
-            }
-            else if (textComp.gameObject.name == "InformationText" || textComp.gameObject.name.Contains("Information"))
-            {
-                textComp.text = description;
-            }
-        }
+        // Collider: the default CapsuleCollider from CreatePrimitive is fine,
+        // but we need it to be a trigger and tall enough to catch the player
+        Collider defaultCol = spotObj.GetComponent<Collider>();
+        if (defaultCol != null)
+            DestroyImmediate(defaultCol);
+
+        // Use a BoxCollider set as trigger. 
+        // The cylinder's local Y scale is 0.02, so we need a large local height.
+        // World height = localSize.y * localScale.y = 100 * 0.02 = 2.0 meters
+        BoxCollider bc = spotObj.AddComponent<BoxCollider>();
+        bc.isTrigger = true;
+        bc.size = new Vector3(1.0f, 100f, 1.0f);
+        bc.center = new Vector3(0, 50f, 0);
+
+        // CRITICAL: Rigidbody is REQUIRED for OnTriggerEnter/Exit to fire.
+        // Without it, Unity silently ignores all trigger collisions.
+        Rigidbody rb = spotObj.AddComponent<Rigidbody>();
+        rb.isKinematic = true;
+        rb.useGravity = false;
+
+        // Attach the trigger script and link it to the InfoCanvas
+        DisplaySpotTrigger trigger = spotObj.AddComponent<DisplaySpotTrigger>();
+        trigger.infoCanvas = infoCanvas;
     }
 
-    private GameObject FindKatanaInfoCanvas()
+    // ─── Remove All ──────────────────────────────────────────────────────
+
+    private void RemoveAll()
     {
-        // 1. Search Katana_Generic01 directly
-        GameObject katana = FindInScene("Katana_Generic01");
-        if (katana != null)
-        {
-            Transform canvasTrans = FindChildRecursiveExact(katana.transform, "InfoCanvas");
-            if (canvasTrans != null) return canvasTrans.gameObject;
-        }
-
-        // 2. Search anywhere in loaded scene hierarchy
-        foreach (GameObject root in UnityEngine.SceneManagement.SceneManager.GetActiveScene().GetRootGameObjects())
-        {
-            Transform canvasTrans = FindChildRecursiveExact(root.transform, "InfoCanvas");
-            if (canvasTrans != null) return canvasTrans.gameObject;
-        }
-
-        // 3. Search via Resources / FindObjectsOfTypeAll (finds inactive scene objects too)
-        GameObject[] allObjects = Resources.FindObjectsOfTypeAll<GameObject>();
-        foreach (GameObject go in allObjects)
-        {
-            if (go.name == "InfoCanvas" && go.scene.isLoaded)
-            {
-                return go;
-            }
-        }
-
-        return null;
-    }
-
-    private void RemoveGeneratedCanvases()
-    {
-        string[] names = { "Sword", "Shield", "Anubis", "Pharoah" };
         int count = 0;
 
-        foreach (string name in names)
+        // Remove spots container
+        GameObject container = GameObject.Find("--- InfoSpots ---");
+        if (container != null)
         {
-            GameObject target = FindInScene(name);
+            int childCount = container.transform.childCount;
+            Undo.DestroyObjectImmediate(container);
+            count += childCount;
+        }
+
+        // Remove InfoCanvases from items
+        foreach (var data in items)
+        {
+            GameObject target = FindInScene(data.objectName);
             if (target == null) continue;
 
-            Transform colliders = FindChildRecursiveExact(target.transform, "_Colliders");
+            // Check under _Colliders
+            Transform colliders = target.transform.Find("_Colliders");
+            if (colliders == null)
+                colliders = FindChildRecursive(target.transform, "_Colliders");
+
             if (colliders != null)
             {
                 Transform canvas = colliders.Find("InfoCanvas");
-                if (canvas != null)
+                // PROTECT the source template from being deleted by the cleanup tool!
+                if (canvas != null && data.objectName != "Katana_Generic01")
                 {
                     Undo.DestroyObjectImmediate(canvas.gameObject);
                     count++;
                 }
             }
 
+            // Check directly on target
             Transform directCanvas = target.transform.Find("InfoCanvas");
             if (directCanvas != null)
             {
                 Undo.DestroyObjectImmediate(directCanvas.gameObject);
                 count++;
             }
+
+            // Clean up old child spots
+            Transform oldSpot = target.transform.Find("InfoSpot");
+            if (oldSpot != null)
+            {
+                Undo.DestroyObjectImmediate(oldSpot.gameObject);
+                count++;
+            }
+        }
+
+        // Also remove the old PlayerProximityTrigger spots container if it exists
+        GameObject oldContainer = GameObject.Find("InfoSpotsContainer");
+        if (oldContainer != null)
+        {
+            Undo.DestroyObjectImmediate(oldContainer);
+            count++;
         }
 
         UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(
             UnityEngine.SceneManagement.SceneManager.GetActiveScene());
 
-        Debug.Log($"Removed {count} InfoCanvas object(s).");
+        Debug.Log($"[InfoCanvasGenerator] Removed {count} generated object(s).");
+        EditorUtility.DisplayDialog("Cleanup", $"Removed {count} generated object(s).", "OK");
+    }
+
+    // ─── Text Updater ────────────────────────────────────────────────────
+
+    private void UpdateTexts(GameObject canvasObj, string title, string description)
+    {
+        // TextMeshPro texts
+        TMP_Text[] tmpTexts = canvasObj.GetComponentsInChildren<TMP_Text>(true);
+        foreach (var t in tmpTexts)
+        {
+            if (t.gameObject.name.Contains("Title"))
+                t.text = title;
+            else if (t.gameObject.name.Contains("Information"))
+                t.text = description;
+        }
+
+        // Legacy UI texts
+        Text[] uiTexts = canvasObj.GetComponentsInChildren<Text>(true);
+        foreach (var t in uiTexts)
+        {
+            if (t.gameObject.name.Contains("Title"))
+                t.text = title;
+            else if (t.gameObject.name.Contains("Information"))
+                t.text = description;
+        }
+    }
+
+    // ─── Scene Search Helpers ────────────────────────────────────────────
+
+    private GameObject FindKatanaInfoCanvas()
+    {
+        // 1. Search under Katana_Generic01
+        GameObject katana = FindInScene("Katana_Generic01");
+        if (katana != null)
+        {
+            Transform t = FindChildRecursive(katana.transform, "InfoCanvas");
+            if (t != null) return t.gameObject;
+        }
+
+        // 2. Search all root objects
+        foreach (GameObject root in UnityEngine.SceneManagement.SceneManager.GetActiveScene().GetRootGameObjects())
+        {
+            Transform t = FindChildRecursive(root.transform, "InfoCanvas");
+            if (t != null) return t.gameObject;
+        }
+
+        // 3. FindObjectsOfTypeAll (catches inactive objects)
+        foreach (GameObject go in Resources.FindObjectsOfTypeAll<GameObject>())
+        {
+            if (go.name == "InfoCanvas" && go.scene.isLoaded)
+                return go;
+        }
+
+        return null;
     }
 
     private GameObject FindInScene(string name)
     {
-        // Exact match search
+        // Exact match
         foreach (GameObject root in UnityEngine.SceneManagement.SceneManager.GetActiveScene().GetRootGameObjects())
         {
-            if (root.name.Equals(name, System.StringComparison.OrdinalIgnoreCase)) return root;
-            Transform found = FindChildRecursiveExact(root.transform, name);
+            if (root.name.Equals(name, System.StringComparison.OrdinalIgnoreCase))
+                return root;
+            Transform found = FindChildRecursive(root.transform, name);
             if (found != null) return found.gameObject;
         }
 
-        // Partial match search (e.g., "Sword_Display" if "Sword" requested)
+        // Partial match (e.g. "Sword_Display" when searching "Sword")
         foreach (GameObject root in UnityEngine.SceneManagement.SceneManager.GetActiveScene().GetRootGameObjects())
         {
-            if (root.name.IndexOf(name, System.StringComparison.OrdinalIgnoreCase) >= 0) return root;
-            Transform found = FindChildRecursiveContains(root.transform, name);
+            if (root.name.IndexOf(name, System.StringComparison.OrdinalIgnoreCase) >= 0)
+                return root;
+            Transform found = FindChildContains(root.transform, name);
             if (found != null) return found.gameObject;
         }
 
         return null;
     }
 
-    private Transform FindChildRecursiveExact(Transform parent, string name)
+    private Transform FindChildRecursive(Transform parent, string name)
     {
         foreach (Transform child in parent)
         {
-            if (child.name.Equals(name, System.StringComparison.OrdinalIgnoreCase)) return child;
-            Transform found = FindChildRecursiveExact(child, name);
+            if (child.name.Equals(name, System.StringComparison.OrdinalIgnoreCase))
+                return child;
+            Transform found = FindChildRecursive(child, name);
             if (found != null) return found;
         }
         return null;
     }
 
-    private Transform FindChildRecursiveContains(Transform parent, string name)
+    private Transform FindChildContains(Transform parent, string name)
     {
         foreach (Transform child in parent)
         {
-            if (child.name.IndexOf(name, System.StringComparison.OrdinalIgnoreCase) >= 0) return child;
-            Transform found = FindChildRecursiveContains(child, name);
+            if (child.name.IndexOf(name, System.StringComparison.OrdinalIgnoreCase) >= 0)
+                return child;
+            Transform found = FindChildContains(child, name);
             if (found != null) return found;
         }
         return null;

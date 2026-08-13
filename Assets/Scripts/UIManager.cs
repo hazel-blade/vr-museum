@@ -41,4 +41,20 @@ public class UIManager : MonoBehaviour
             }
         }
     }
+
+    public void ShowUI()
+    {
+        if(UICanvas && !UICanvas.gameObject.activeSelf)
+        {
+            UICanvas.gameObject.SetActive(true);
+        }
+    }
+
+    public void HideUI()
+    {
+        if(UICanvas && UICanvas.gameObject.activeSelf)
+        {
+            UICanvas.gameObject.SetActive(false);
+        }
+    }
 }

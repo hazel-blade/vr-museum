@@ -241,8 +241,8 @@ public class MissionManager : MonoBehaviour
 
     private IEnumerator EndGameRoutine()
     {
-        // Wait a few seconds for NPCs to gather and the player to enjoy the scene
-        yield return new WaitForSeconds(5f);
+        // Wait 15 seconds for NPCs to gather and the player to enjoy the scene
+        yield return new WaitForSeconds(15f);
         
         Debug.Log("Game Won! Going to Ending Scene.");
         

@@ -208,29 +208,34 @@ public class NPCVisitor : MonoBehaviour
     
     private IEnumerator GoToStageRoutine()
     {
-        GameObject stageWp = GameObject.Find("StageWaypoint");
-        Vector3 targetPos;
+        Transform centerTransform = null;
         
-        if (stageWp != null)
-        {
-            Vector2 rand = Random.insideUnitCircle * 3f;
-            targetPos = stageWp.transform.position + new Vector3(rand.x, 0, rand.y);
-        }
-        else
-        {
-            GameObject stage = GameObject.Find("ModularStage") ?? GameObject.Find("MC_light");
-            if (stage != null)
-            {
-                Vector2 rand = Random.insideUnitCircle * 3f;
-                targetPos = stage.transform.position + new Vector3(rand.x, 0, rand.y - 3f);
-            }
-            else
-            {
-                yield break;
-            }
-        }
+        GameObject stageWp = GameObject.Find("StageWaypoint");
+        GameObject stage = GameObject.Find("ModularStage") ?? GameObject.Find("MC_light");
 
-        yield return StartCoroutine(WalkTo(targetPos));
+        if (stageWp != null) centerTransform = stageWp.transform;
+        else if (stage != null) centerTransform = stage.transform;
+
+        if (centerTransform != null)
+        {
+            // Pick a tighter angle so they stay directly in front of the stage, rather than wrapping around
+            float randomAngle = Random.Range(-45f, 45f); 
+            
+            // Keep them relatively close to the stage (2 to 4 meters) so they don't get pushed into walls
+            float distance = Random.Range(2.0f, 4.0f); 
+
+            // Calculate the position. User specified the stage front is at -90 / 270 degrees (-X direction)
+            float rad = randomAngle * Mathf.Deg2Rad;
+            
+            // For -X direction:
+            // Center of the arc (0 degrees) will produce (-distance, 0)
+            float xOffset = -Mathf.Cos(rad) * distance; 
+            float zOffset = Mathf.Sin(rad) * distance;
+
+            Vector3 targetPos = centerTransform.position + new Vector3(xOffset, 0, zOffset);
+            
+            yield return StartCoroutine(WalkTo(targetPos));
+        }
     }
 
     private IEnumerator VisitRoutine()
@@ -284,14 +289,24 @@ public class NPCVisitor : MonoBehaviour
             else yield break;
         }
 
-        if (NavMesh.SamplePosition(targetPosition, out NavMeshHit targetHit, 1.5f, NavMesh.AllAreas))
+        if (NavMesh.SamplePosition(targetPosition, out NavMeshHit targetHit, 10.0f, NavMesh.AllAreas))
         {
             targetPosition = targetHit.position;
         }
+        else
+        {
+            Debug.LogWarning($"[NPCVisitor] Could not find any NavMesh near {targetPosition} for {gameObject.name}");
+        }
 
         agent.SetDestination(targetPosition);
+        
         while (agent.pathPending) yield return null;
-        if (agent.pathStatus == NavMeshPathStatus.PathInvalid) yield break;
+        
+        if (agent.pathStatus == NavMeshPathStatus.PathInvalid)
+        {
+            Debug.LogWarning($"[NPCVisitor] Path Invalid for {gameObject.name} to {targetPosition}");
+            yield break;
+        }
 
         float timer = 0f;
         while (agent.remainingDistance > agent.stoppingDistance + 0.1f && timer < maxWalkTimeout)
