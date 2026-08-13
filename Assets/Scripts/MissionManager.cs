@@ -129,6 +129,8 @@ public class MissionManager : MonoBehaviour
         
         if (generatorCheckmark != null) generatorCheckmark.SetActive(true);
 
+        if (AudioManager.Instance != null) AudioManager.Instance.PlayGeneratorComplete();
+
         Debug.Log("Mission Update: Generator is running (Mission 1 Complete).");
         CheckMuseumOpen();
     }
@@ -155,6 +157,9 @@ public class MissionManager : MonoBehaviour
         {
             isMission2Complete = true;
             if (nodachiCheckmark != null) nodachiCheckmark.SetActive(true);
+            
+            if (AudioManager.Instance != null) AudioManager.Instance.PlayMissionComplete();
+            
             Debug.Log("Mission Update: Both items replaced (Mission 2 Complete).");
             CheckMuseumOpen();
         }
@@ -172,6 +177,12 @@ public class MissionManager : MonoBehaviour
     private void OpenMuseum()
     {
         isMuseumOpen = true;
+        
+        if (AudioManager.Instance != null) 
+        {
+            AudioManager.Instance.PlayMuseumOpen();
+            AudioManager.Instance.PlayBGM();
+        }
 
         if (timerText != null)
         {
@@ -220,6 +231,12 @@ public class MissionManager : MonoBehaviour
         isTimerRunning = false; // Stop the timer
 
         if (sayaNodachiCheckmark != null) sayaNodachiCheckmark.SetActive(true); // Mission 3 Complete UI
+        
+        if (AudioManager.Instance != null) 
+        {
+            AudioManager.Instance.StopBGM();
+            AudioManager.Instance.PlayVictory();
+        }
 
         if (timerText != null)
         {
