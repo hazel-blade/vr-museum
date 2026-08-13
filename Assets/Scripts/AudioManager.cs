@@ -53,6 +53,7 @@ public class AudioManager : MonoBehaviour
     {
         if (backgroundMusic != null && bgmSource != null)
         {
+            Debug.Log("[AudioManager] Playing BGM");
             bgmSource.clip = backgroundMusic;
             bgmSource.Play();
         }
@@ -62,6 +63,7 @@ public class AudioManager : MonoBehaviour
     {
         if (bgmSource != null)
         {
+            Debug.Log("[AudioManager] Stopping BGM");
             bgmSource.Stop();
         }
     }
@@ -90,6 +92,7 @@ public class AudioManager : MonoBehaviour
     {
         if (clip != null && sfxSource != null)
         {
+            Debug.Log($"[AudioManager] Playing SFX: {clip.name}");
             sfxSource.PlayOneShot(clip);
         }
         else

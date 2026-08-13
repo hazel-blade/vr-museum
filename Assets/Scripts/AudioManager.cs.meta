@@ -3,7 +3,14 @@ guid: 72eba5a6721a3e245abcc8d649ba72a6
 MonoImporter:
   externalObjects: {}
   serializedVersion: 2
-  defaultReferences: []
+  defaultReferences:
+  - bgmSource: {instanceID: 0}
+  - sfxSource: {instanceID: 0}
+  - backgroundMusic: {fileID: 8300000, guid: 077a1602313f1aa4ab6fb6fe06cd688b, type: 3}
+  - generatorCompleteSound: {fileID: 8300000, guid: 012a5b9ad102f2b4da932a974437dab3, type: 3}
+  - missionCompleteSound: {fileID: 8300000, guid: b6c6b235852d37049a23d9d587620186, type: 3}
+  - museumOpenSound: {fileID: 8300000, guid: 93d8987de7dfa5641b0248e4d2bbac7f, type: 3}
+  - victorySound: {fileID: 8300000, guid: 9a7a53bb435c2ca40877794108f3e13d, type: 3}
   executionOrder: 0
   icon: {instanceID: 0}
   userData: 
