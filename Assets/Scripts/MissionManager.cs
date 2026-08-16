@@ -43,6 +43,14 @@ public class MissionManager : MonoBehaviour
     public bool isMuseumOpen = false;
     private bool isStageReached = false;
 
+    [Header("Checkpoint & Player Settings")]
+    [SerializeField] private Transform playerTransform;
+    [SerializeField] private Transform initialCheckpointTransform;
+
+    private Vector3 lastCheckpointPosition;
+    private Quaternion lastCheckpointRotation;
+    private bool hasCheckpoint = false;
+
     private void Awake()
     {
         if (Instance == null)
@@ -57,7 +65,38 @@ public class MissionManager : MonoBehaviour
 
     private void Start()
     {
+        InitializePlayerAndCheckpoint();
+        BindTimeOutPanelButtons();
         StartBlackoutMission();
+    }
+
+    private void InitializePlayerAndCheckpoint()
+    {
+        if (playerTransform == null)
+        {
+            CharacterController cc = FindObjectOfType<CharacterController>();
+            if (cc != null)
+            {
+                playerTransform = cc.transform;
+            }
+            else if (Camera.main != null)
+            {
+                playerTransform = Camera.main.transform.root;
+            }
+        }
+
+        if (initialCheckpointTransform != null)
+        {
+            lastCheckpointPosition = initialCheckpointTransform.position;
+            lastCheckpointRotation = initialCheckpointTransform.rotation;
+            hasCheckpoint = true;
+        }
+        else if (playerTransform != null)
+        {
+            lastCheckpointPosition = playerTransform.position;
+            lastCheckpointRotation = playerTransform.rotation;
+            hasCheckpoint = true;
+        }
     }
 
     private void Update()
@@ -131,6 +170,8 @@ public class MissionManager : MonoBehaviour
 
         if (AudioManager.Instance != null) AudioManager.Instance.PlayGeneratorComplete();
 
+        SaveCurrentCheckpoint();
+
         Debug.Log("Mission Update: Generator is running (Mission 1 Complete).");
         CheckMuseumOpen();
     }
@@ -160,6 +201,8 @@ public class MissionManager : MonoBehaviour
             
             if (AudioManager.Instance != null) AudioManager.Instance.PlayMissionComplete();
             
+            SaveCurrentCheckpoint();
+
             Debug.Log("Mission Update: Both items replaced (Mission 2 Complete).");
             CheckMuseumOpen();
         }
@@ -308,12 +351,75 @@ public class MissionManager : MonoBehaviour
         textRt.anchoredPosition = Vector2.zero;
     }
 
+    public void SaveCurrentCheckpoint()
+    {
+        if (playerTransform != null)
+        {
+            lastCheckpointPosition = playerTransform.position;
+            lastCheckpointRotation = playerTransform.rotation;
+            hasCheckpoint = true;
+            Debug.Log($"Checkpoint saved at position: {lastCheckpointPosition}");
+        }
+    }
+
+    public void SetCheckpoint(Vector3 position, Quaternion rotation)
+    {
+        lastCheckpointPosition = position;
+        lastCheckpointRotation = rotation;
+        hasCheckpoint = true;
+        Debug.Log($"Checkpoint set to position: {position}");
+    }
+
+    public void SetCheckpoint(Transform checkpointTransform)
+    {
+        if (checkpointTransform != null)
+        {
+            SetCheckpoint(checkpointTransform.position, checkpointTransform.rotation);
+        }
+    }
+
+    private void TeleportPlayerToCheckpoint()
+    {
+        if (playerTransform == null || !hasCheckpoint) return;
+
+        CharacterController cc = playerTransform.GetComponent<CharacterController>();
+        if (cc != null) cc.enabled = false;
+
+        playerTransform.position = lastCheckpointPosition;
+        playerTransform.rotation = lastCheckpointRotation;
+
+        if (cc != null) cc.enabled = true;
+
+        Debug.Log($"Teleported player to checkpoint: {lastCheckpointPosition}");
+    }
+
+    private void BindTimeOutPanelButtons()
+    {
+        if (timeOutPanel == null) return;
+
+        UnityEngine.UI.Button[] buttons = timeOutPanel.GetComponentsInChildren<UnityEngine.UI.Button>(true);
+        foreach (var btn in buttons)
+        {
+            if (btn.name.Contains("Checkpoint"))
+            {
+                btn.onClick.RemoveListener(ChooseCheckpoint);
+                btn.onClick.AddListener(ChooseCheckpoint);
+            }
+            else if (btn.name.Contains("MainMenu") || btn.name.Contains("Main Menu"))
+            {
+                btn.onClick.RemoveListener(ChooseMainMenu);
+                btn.onClick.AddListener(ChooseMainMenu);
+            }
+        }
+    }
+
     private void OnTimeRanOut()
     {
         isTimerRunning = false;
         Debug.Log("Time ran out! Showing options...");
         if (timeOutPanel != null)
         {
+            BindTimeOutPanelButtons();
             timeOutPanel.SetActive(true);
         }
         else
@@ -333,13 +439,14 @@ public class MissionManager : MonoBehaviour
 
         if (completedCount >= 1)
         {
-            remainingTime = timeLimitSeconds / 2f; // Get half time
+            TeleportPlayerToCheckpoint();
+            remainingTime = timeLimitSeconds / 2f; // Get half time (5 minutes)
             Debug.Log($"Restarting from checkpoint. Time left: {remainingTime}s");
             isTimerRunning = true;
             isStageReached = false;
             if (timerText != null)
             {
-                timerText.color = Color.white;
+                timerText.color = isMuseumOpen ? Color.yellow : Color.white;
                 UpdateTimerUI();
             }
         }

@@ -3946,6 +3946,8 @@ MonoBehaviour:
   nodachiCheckmark: {fileID: 712784719}
   sayaNodachiCheckmark: {fileID: 1289013440}
   isMuseumOpen: 1
+  playerTransform: {fileID: 0}
+  initialCheckpointTransform: {fileID: 0}
 --- !u!4 &304848689
 Transform:
   m_ObjectHideFlags: 0
@@ -17044,7 +17046,7 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 0}
+      - m_Target: {fileID: 304848688}
         m_TargetAssemblyTypeName: MissionManager, Assembly-CSharp
         m_MethodName: ChooseCheckpoint
         m_Mode: 1
@@ -25819,7 +25821,7 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 0}
+      - m_Target: {fileID: 304848688}
         m_TargetAssemblyTypeName: MissionManager, Assembly-CSharp
         m_MethodName: ChooseMainMenu
         m_Mode: 1
@@ -27226,7 +27228,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!4 &1645872027
 Transform:
   m_ObjectHideFlags: 0
